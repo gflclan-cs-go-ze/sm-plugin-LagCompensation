@@ -5,7 +5,7 @@
 #include <dhooks>
 #include <clientprefs>
 
-#define PLUGIN_VERSION "1.0.4"
+#define PLUGIN_VERSION "1.0.4-GFL"
 
 #define SetBit(%1,%2)		((%1)[(%2) >> 5] |= (1 << ((%2) & 31)))
 #define ClearBit(%1,%2)		((%1)[(%2) >> 5] &= ~(1 << ((%2) & 31)))
@@ -78,7 +78,7 @@ enum
 #define SF_LAGCOMP_DISABLE (1 << 30)
 
 #define MAX_RECORDS 32
-#define MAX_ENTITIES 256
+#define MAX_ENTITIES 300
 
 enum struct LagRecord
 {
@@ -161,6 +161,8 @@ int g_iDisableLagComp[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
+	LoadTranslations("common.phrases");
+
 	CreateConVar("sm_lagcomp_version", PLUGIN_VERSION, "LagCompensation Version", FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD).SetString(PLUGIN_VERSION);
 
 	Handle hGameData = LoadGameConfigFile("LagCompensation.games");
@@ -330,12 +332,13 @@ public void OnPluginStart()
 	g_hCookie_DisableLagComp = RegClientCookie("disable_lagcomp", "", CookieAccess_Private);
 	RegConsoleCmd("sm_lagcomp", OnToggleLagCompSettings);
 	RegConsoleCmd("sm_0ping", OnToggleLagCompSettings);
+	RegConsoleCmd("sm_checklag", CheckLagComp);
 	SetCookieMenuItem(MenuHandler_CookieMenu, 0, "LagCompensation");
 
 	CreateTimer(0.1, DisableLagCompTimer, _, TIMER_REPEAT);
 
 	RegAdminCmd("sm_unlag", Command_AddLagCompensation, ADMFLAG_RCON, "sm_unlag <entidx>");
-	RegAdminCmd("sm_lagged", Command_CheckLagCompensated, ADMFLAG_GENERIC, "sm_lagged");
+	RegAdminCmd("sm_lagged", Command_CheckLagCompensated, ADMFLAG_RCON, "sm_lagged");
 
 	FilterClientSolidTouch(g_aaFilterClientSolidTouch, true);
 	BlockTriggerMoved(g_aBlockTriggerMoved, true);
@@ -454,11 +457,21 @@ public void OnClientConnected(int client)
 public void OnClientCookiesCached(int client)
 {
 	char sBuffer[16];
+	//char steamID[33];
+
+	//GetClientAuthId(client, AuthId_Steam2, steamID, sizeof(steamID), true);
 	GetClientCookie(client, g_hCookie_DisableLagComp, sBuffer, sizeof(sBuffer));
+
 	if(sBuffer[0])
+	{
 		g_bDisableLagComp[client] = true;
+		//PrintToBoth("%N[%s] has joined with LagCompensation disabled", client, steamID);
+	}
 	else
+	{
 		g_bDisableLagComp[client] = false;
+		//PrintToBoth("%N[%s] has joined with LagCompensation enabled", client, steamID);
+	}
 }
 
 public void OnClientSettingsChanged(int client)
@@ -596,9 +609,11 @@ bool CheckEntityForLagComp(int entity, const char[] classname, bool bRecursive=f
 	if(SpawnFlags & SF_LAGCOMP_DISABLE)
 		return false;
 
-	bool bTrigger = StrEqual(classname, "trigger_hurt", false) ||
-					StrEqual(classname, "trigger_push", false) ||
-					StrEqual(classname, "trigger_teleport", false);
+	//bool bTrigger = StrEqual(classname, "trigger_hurt", false) ||
+	//				StrEqual(classname, "trigger_push", false) ||
+	//				StrEqual(classname, "trigger_teleport", false);
+
+	bool bTrigger = false;
 
 	bool bPhysbox = !strncmp(classname, "func_physbox", 12, false);
 
@@ -1321,13 +1336,14 @@ stock void PrintToBoth(const char[] format, any ...)
 	VFormat(buffer, sizeof(buffer), format, 2);
 	LogMessage(buffer);
 
-	for(int client = 1; client <= MaxClients; client++)
+	//we don't wanna spam peoples consoles, just sourcemod log is fine
+	/*for(int client = 1; client <= MaxClients; client++)
 	{
 		if(IsClientInGame(client))
 		{
 			PrintToConsole(client, "%s", buffer);
 		}
-	}
+	}*/
 }
 
 public Action DisableLagCompTimer(Handle timer)
@@ -1364,10 +1380,35 @@ public void ToggleLagCompSettings(int client)
 	if(!client)
 		return;
 
+	char steamID[33];
+
 	g_bDisableLagComp[client] = !g_bDisableLagComp[client];
 	SetClientCookie(client, g_hCookie_DisableLagComp, g_bDisableLagComp[client] ? "1" : "");
+	PrintToChat(client, " \x04[LagCompensation] \x01LagCompensation has been %s.", g_bDisableLagComp[client] ? "disabled, this is not recommended" : "enabled (bosses only)");
 
-	PrintToChat(client, "\x04[LagCompensation]\x01 LagCompensation has been %s.", g_bDisableLagComp[client] ? "disabled" : "enabled");
+	GetClientAuthId(client, AuthId_Steam2, steamID, sizeof(steamID), true);
+	PrintToBoth("%N[%s] has %s LagCompensation", client, steamID, g_bDisableLagComp[client] ? "disabled" : "enabled");
+}
+
+public Action CheckLagComp(int client, int args)
+{
+	if (args == 0)
+		PrintToChat(client, " \x04[LagCompensation] \x01LagCompensation is %s for %N.", g_bDisableLagComp[client] ? "disabled" : "enabled (bosses only)", client);
+		
+	if (args == 1)
+	{
+		char arg1[65];
+		GetCmdArg(1, arg1, sizeof(arg1));
+		int target = FindTarget(client, arg1, false, false);
+		if (target == -1)
+		{
+			return Plugin_Handled;
+		}
+		
+		PrintToChat(client, " \x04[LagCompensation] \x01LagCompensation is %s for %N.", g_bDisableLagComp[target] ? "disabled" : "enabled (bosses only)", target);
+	}
+	
+	return Plugin_Handled;
 }
 
 public void ShowSettingsMenu(int client)
