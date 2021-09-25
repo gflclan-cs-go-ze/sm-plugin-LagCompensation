@@ -503,7 +503,9 @@ public void OnEntityCreated(int entity, const char[] classname)
 		DHookEntity(g_hAcceptInput, true, entity);
 	}
 
-	if (!g_bHasOnEntitySpawned && (!strncmp(classname, "func_physbox", 12, false) || StrEqual(classname, "trigger_hurt", false) || StrEqual(classname, "trigger_push", false) || StrEqual(classname, "trigger_teleport", false)))
+	// Disable trigger lag compensation
+	// if(!g_bHasOnEntitySpawned && (!strncmp(classname, "func_physbox", 12, false) || StrEqual(classname, "trigger_hurt", false) || StrEqual(classname, "trigger_push", false) || StrEqual(classname, "trigger_teleport", false)))
+	if (!g_bHasOnEntitySpawned && !strncmp(classname, "func_physbox", 12, false))
 	{
 		SDKHook(entity, SDKHook_SpawnPost, OnSDKHookEntitySpawnPost);
 	}
@@ -609,10 +611,10 @@ bool CheckEntityForLagComp(int entity, const char[] classname, bool bRecursive=f
 	if(SpawnFlags & SF_LAGCOMP_DISABLE)
 		return false;
 
-	//bool bTrigger = StrEqual(classname, "trigger_hurt", false) ||
+	// Disable trigger lag compensation
+	// bool bTrigger = StrEqual(classname, "trigger_hurt", false) ||
 	//				StrEqual(classname, "trigger_push", false) ||
 	//				StrEqual(classname, "trigger_teleport", false);
-
 	bool bTrigger = false;
 
 	bool bPhysbox = !strncmp(classname, "func_physbox", 12, false);
